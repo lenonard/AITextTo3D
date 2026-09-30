@@ -1,0 +1,14 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"AiTextTo3D JSON CAD v1",
+  "type":"object",
+  "required":["version","units","parts"],
+  "properties":{
+    "version":{"type":"string","pattern":"^1\\."},
+    "units":{"enum":["mm","millimeter","millimeters"]},
+    "metadata":{"type":"object"},
+    "parts":{"type":"array","items":{"type":"object","required":["id","op"],"properties":{"id":{"type":"string","minLength":1},"op":{"type":"string"}},"additionalProperties":true}},
+    "result":{"type":"object"}
+  },
+  "additionalProperties":true
+}

@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "units": "mm",
+  "metadata": {
+    "name": "stylized_penguin_multiview_demo",
+    "source": "8-view reference sheet",
+    "note": "Demonstrates curved primitives and a smooth body loft suitable for the multiview reconstruction workflow."
+  },
+  "parts": [
+    {"id":"body","op":"loft","sections":[
+      {"z":8,"shape":"ellipse","rx":24,"ry":21,"center":[0,1]},
+      {"z":24,"shape":"ellipse","rx":36,"ry":31,"center":[0,0]},
+      {"z":50,"shape":"ellipse","rx":41,"ry":35,"center":[0,0]},
+      {"z":76,"shape":"ellipse","rx":39,"ry":34,"center":[0,-1]},
+      {"z":99,"shape":"ellipse","rx":31,"ry":29,"center":[0,-2]},
+      {"z":116,"shape":"ellipse","rx":17,"ry":18,"center":[0,-2]}
+    ]},
+    {"id":"wing_left","op":"ellipsoid","radii":[8,5,27],"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[0,1,0],"angle_deg":-18}],"translate":[-35,0,62]}},
+    {"id":"wing_right","op":"ellipsoid","radii":[8,5,27],"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[0,1,0],"angle_deg":18}],"translate":[35,0,62]}},
+    {"id":"beak","op":"cone","radius1":9,"radius2":0.8,"height":15,"axis":[0,-1,0],"base":[0,-30,77],"transform":{"scale":[1.15,1.0,0.72]}},
+    {"id":"eye_left","op":"ellipsoid","radii":[4.2,3.0,5.3],"transform":{"translate":[-12,-28,88]}},
+    {"id":"eye_right","op":"ellipsoid","radii":[4.2,3.0,5.3],"transform":{"translate":[12,-28,88]}},
+    {"id":"foot_left","op":"ellipsoid","radii":[17,12,4.5],"transform":{"translate":[-19,-8,5]}},
+    {"id":"foot_right","op":"ellipsoid","radii":[17,12,4.5],"transform":{"translate":[19,-8,5]}},
+    {"id":"tail","op":"ellipsoid","radii":[9,6,6],"transform":{"translate":[0,34,22]}}
+  ],
+  "result":{"op":"compound","items":["body","wing_left","wing_right","beak","eye_left","eye_right","foot_left","foot_right","tail"]}
+}

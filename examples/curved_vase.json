@@ -1,0 +1,11 @@
+{
+  "version":"1.0","units":"mm","metadata":{"name":"curved_loft_demo"},
+  "parts":[{"id":"vase","op":"loft","sections":[
+    {"z":0,"shape":"ellipse","rx":24,"ry":24},
+    {"z":20,"shape":"ellipse","rx":36,"ry":32},
+    {"z":55,"shape":"ellipse","rx":28,"ry":25,"center":[3,0]},
+    {"z":85,"shape":"ellipse","rx":19,"ry":18,"center":[6,0]},
+    {"z":110,"shape":"ellipse","rx":25,"ry":22,"center":[5,0]}
+  ]}],
+  "result":{"op":"ref","name":"vase"}
+}

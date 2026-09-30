@@ -1,0 +1,80 @@
+name: JSON CAD to STL
+
+on:
+  workflow_dispatch:
+    inputs:
+      json_path:
+        description: "JSON CAD path in repository"
+        required: true
+        default: "examples/penguin.json"
+      output_name:
+        description: "STL base name (without .stl)"
+        required: true
+        default: "model"
+  push:
+    paths:
+      - "inputs/**/*.json"
+      - "examples/**/*.json"
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "schema.json"
+      - ".github/workflows/json-cad-to-stl.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        env:
+          PYTHONPATH: src
+        run: pytest -q
+      - name: Build requested JSON (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PYTHONPATH: src
+          JSON_PATH: ${{ inputs.json_path }}
+          OUTPUT_NAME: ${{ inputs.output_name }}
+        run: |
+          mkdir -p output
+          python -m aitextto3d build "$JSON_PATH" -o "output/${OUTPUT_NAME}.stl"
+      - name: Build JSON files (push run)
+        if: github.event_name == 'push'
+        env:
+          PYTHONPATH: src
+        run: |
+          mkdir -p output
+          shopt -s nullglob globstar
+          files=(inputs/**/*.json examples/**/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No JSON CAD files found."
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            rel="${f#*/}"
+            safe="${rel%.json}"
+            safe="${safe//\//_}"
+            echo "Building $f -> output/${safe}.stl"
+            python -m aitextto3d build "$f" -o "output/${safe}.stl"
+          done
+      - name: List output
+        run: ls -lah output
+      - name: Upload STL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aitextto3d-stl
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
