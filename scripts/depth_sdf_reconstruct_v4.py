@@ -122,16 +122,18 @@ def point_cloud_register(ds, surfaces, masks, diag: Path):
         ortho_pts = np.concatenate([view_cloud(ds, surfaces[o], masks[o], o, 8) for o in ortho], 0)
         half = (ds.depth if view in ("front", "back") else ds.width) * 0.5
         base = surfaces[view]
-        best = (1e9, 1.0, 0.0)
-        for gain in np.linspace(0.90, 1.10, 7):
-            for off in np.linspace(-0.035*half, 0.035*half, 5):
+        best = (1e9, 1.0, 0.0, 0.0)
+        for gain in np.linspace(0.97, 1.03, 7):
+            for off in np.linspace(-0.012*half, 0.012*half, 5):
                 trial = np.clip(gain * base + off, 0, half) * masks[view]
                 pts = view_cloud(ds, trial, masks[view], view, 8)
-                s = registration_score(pts, ortho_pts, view)
-                if s < best[0]: best = (s, float(gain), float(off))
-        _, gain, off = best
+                nn = registration_score(pts, ortho_pts, view)
+                penalty = 0.15 * half * abs(gain - 1.0) + 0.20 * abs(off)
+                objective = nn + penalty
+                if objective < best[0]: best = (objective, float(gain), float(off), float(nn))
+        _, gain, off, nn = best
         surfaces[view] = np.clip(gain * base + off, 0, half) * masks[view]
-        params[view] = {"gain": gain, "offset": off, "median_nn": best[0]}
+        params[view] = {"gain": gain, "offset": off, "median_nn": nn, "regularized_objective": best[0]}
     (diag / "point_registration.json").write_text(json.dumps(params, indent=2), encoding="utf-8")
     return surfaces, params
 
@@ -216,7 +218,7 @@ def main():
     ap.add_argument("--depth-cache",default=".depth-cache/v4")
     ap.add_argument("--model",default="depth-anything/Depth-Anything-V2-Small-hf")
     ap.add_argument("--resolution",nargs=3,type=int,default=[152,160,216])
-    ap.add_argument("--refine-iterations",type=int,default=3)
+    ap.add_argument("--refine-iterations",type=int,default=5)
     args=ap.parse_args(); build(args)
 
 if __name__=="__main__": main()
