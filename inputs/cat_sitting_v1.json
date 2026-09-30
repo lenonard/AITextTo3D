@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "units": "mm",
+  "metadata": {
+    "name": "cat_sitting_multiview_v1",
+    "source": "cat_sitting_multiview_dataset_v1.zip",
+    "object_id": "cat_sitting_001",
+    "reference_dimensions_relative": [1.0, 1.05, 1.45],
+    "chosen_scale_mm": {"width": 100.0, "depth": 105.0, "height": 145.0},
+    "strategy": "part-aware organic reconstruction from six orthographic silhouettes, landmarks and two isometric validation views",
+    "note": "Coarse printable/game-mesh reconstruction. Fur, stripes and white patches are appearance details and are intentionally not modeled as relief."
+  },
+  "parts": [
+    {"id":"torso","op":"loft","sections":[
+      {"z":6,"shape":"ellipse","rx":33,"ry":35,"center":[0,9]},
+      {"z":15,"shape":"ellipse","rx":42,"ry":46,"center":[0,8]},
+      {"z":30,"shape":"ellipse","rx":45,"ry":48,"center":[0,8]},
+      {"z":48,"shape":"ellipse","rx":43,"ry":46,"center":[0,7]},
+      {"z":66,"shape":"ellipse","rx":38,"ry":42,"center":[0,5]},
+      {"z":82,"shape":"ellipse","rx":31,"ry":36,"center":[0,2]},
+      {"z":94,"shape":"ellipse","rx":25,"ry":31,"center":[0,-1]}
+    ]},
+    {"id":"head","op":"ellipsoid","radii":[33,31,29],"transform":{"translate":[0,-5,111]}},
+    {"id":"cheek_left","op":"ellipsoid","radii":[16,10,13],"transform":{"translate":[-11,-29,99]}},
+    {"id":"cheek_right","op":"ellipsoid","radii":[16,10,13],"transform":{"translate":[11,-29,99]}},
+    {"id":"ear_left","op":"extrude_profile","plane":"XZ","distance":12,"both":true,"profile":{"shape":"polygon","points":[[-11,-8],[10,-8],[4,17],[-2,22],[-8,12]]},"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[0,0,1],"angle_deg":-4}],"translate":[-18,-1,129]}},
+    {"id":"ear_right","op":"extrude_profile","plane":"XZ","distance":12,"both":true,"profile":{"shape":"polygon","points":[[-10,-8],[11,-8],[8,12],[2,22],[-4,17]]},"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[0,0,1],"angle_deg":4}],"translate":[18,-1,129]}},
+    {"id":"hindquarter_left","op":"ellipsoid","radii":[25,33,34],"transform":{"translate":[-28,7,35]}},
+    {"id":"hindquarter_right","op":"ellipsoid","radii":[25,33,34],"transform":{"translate":[28,7,35]}},
+    {"id":"foreleg_left","op":"ellipsoid","radii":[10,11,31],"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[1,0,0],"angle_deg":-4}],"translate":[-17,-21,37]}},
+    {"id":"foreleg_right","op":"ellipsoid","radii":[10,11,31],"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[1,0,0],"angle_deg":-4}],"translate":[17,-21,37]}},
+    {"id":"front_paw_left","op":"ellipsoid","radii":[13,16,7],"transform":{"translate":[-17,-24,8]}},
+    {"id":"front_paw_right","op":"ellipsoid","radii":[13,16,7],"transform":{"translate":[17,-24,8]}},
+    {"id":"rear_paw_left","op":"ellipsoid","radii":[17,20,8],"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[0,0,1],"angle_deg":-12}],"translate":[-32,-5,8]}},
+    {"id":"rear_paw_right","op":"ellipsoid","radii":[17,20,8],"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[0,0,1],"angle_deg":12}],"translate":[32,-5,8]}},
+    {"id":"eye_left","op":"ellipsoid","radii":[5.5,3.2,6.3],"transform":{"translate":[-11.5,-33.0,112.0]}},
+    {"id":"eye_right","op":"ellipsoid","radii":[5.5,3.2,6.3],"transform":{"translate":[11.5,-33.0,112.0]}},
+    {"id":"nose","op":"ellipsoid","radii":[5.2,3.8,3.8],"transform":{"translate":[0,-39,101]}},
+    {"id":"tail","op":"sweep","path":{"plane":"XZ","points":[[-24,12],[-8,8],[12,8],[32,11],[43,18],[39,27],[30,31]]},"profile":{"shape":"circle","radius":7.5},"is_frenet":true,"transform":{"translate":[0,38,0]}},
+    {"id":"tail_tip","op":"ellipsoid","radii":[8,8,10],"transform":{"rotate":[{"axis_start":[0,0,0],"axis_end":[0,1,0],"angle_deg":-18}],"translate":[30,38,31]}}
+  ],
+  "result": {
+    "op":"compound",
+    "items":["torso","head","cheek_left","cheek_right","ear_left","ear_right","hindquarter_left","hindquarter_right","foreleg_left","foreleg_right","front_paw_left","front_paw_right","rear_paw_left","rear_paw_right","eye_left","eye_right","nose","tail","tail_tip"],
+    "transform":{"scale":[0.899,1.062,0.915],"translate":[-2.33,-7.05,6.86]}
+  }
+}
