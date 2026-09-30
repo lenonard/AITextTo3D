@@ -226,7 +226,20 @@ def conservative_trimmed_icp(points: np.ndarray, reference: np.ndarray, maxdim: 
     }
 
 
-def refine_mesh_from_iso(mesh: trimesh.Trimesh, iso_data, maxdim: float, iterations: int = 3):
+def registration_reliability(reg: dict, maxdim: float) -> float:
+    med = float(reg.get("final_median_nn", maxdim))
+    rot = float(reg.get("total_rotation_deg", 180.0))
+    scale = float(reg.get("total_scale", 1.0))
+    a = math.exp(-((med / max(0.035 * maxdim, 1e-6)) ** 2))
+    b = math.exp(-((rot / 7.0) ** 2))
+    c = math.exp(-((math.log(max(scale, 1e-6)) / 0.13) ** 2))
+    r = a * b * c
+    if rot > 12.0 or scale < 0.90 or scale > 1.10:
+        r *= 0.10
+    return float(np.clip(r, 0.0, 1.0))
+
+
+def refine_mesh_from_iso(mesh: trimesh.Trimesh, iso_data, maxdim: float, iterations: int = 2):
     refined = mesh.copy()
     stats = []
     for _ in range(iterations):
@@ -238,36 +251,47 @@ def refine_mesh_from_iso(mesh: trimesh.Trimesh, iso_data, maxdim: float, iterati
         iter_stat = {}
 
         for view, data in iso_data.items():
+            reliability = float(data.get("reliability", 1.0))
+            if reliability < 0.05:
+                iter_stat[view] = {
+                    "supported_vertices": 0,
+                    "median_nn_supported": None,
+                    "reliability": reliability,
+                    "used": False,
+                }
+                continue
             pts = data["points"]
             conf = data["confidence"]
             c = data["camera"]
             tree = cKDTree(pts)
             d, idx = tree.query(verts, k=1)
             facing = np.clip(normals @ c, 0.0, 1.0)
-            sigma = 0.035 * maxdim
+            sigma = 0.032 * maxdim
             dist_w = np.exp(-0.5 * (d / max(sigma, 1e-6)) ** 2)
             c_w = conf[idx]
-            w = dist_w * (facing ** 1.35) * c_w
-            good = (d < 0.075 * maxdim) & (facing > 0.08) & (w > 0.04)
+            w = dist_w * (facing ** 1.4) * c_w * reliability
+            good = (d < 0.065 * maxdim) & (facing > 0.10) & (w > 0.025)
+
             target = pts[idx]
             disp = target - verts
-            lens = np.linalg.norm(disp, axis=1)
-            cap = 0.018 * maxdim
-            scale = np.minimum(1.0, cap / np.maximum(lens, 1e-8))
-            disp = disp * scale[:, None]
-            accum[good] += disp[good] * w[good, None]
+            dn = np.sum(disp * normals, axis=1)
+            dn = np.clip(dn, -0.010 * maxdim, 0.010 * maxdim)
+            ndisp = dn[:, None] * normals
+            accum[good] += ndisp[good] * w[good, None]
             wsum[good] += w[good]
             iter_stat[view] = {
                 "supported_vertices": int(good.sum()),
                 "median_nn_supported": float(np.median(d[good])) if good.any() else None,
+                "reliability": reliability,
+                "used": True,
             }
 
         good = wsum > 1e-8
         delta = np.zeros_like(verts)
         delta[good] = accum[good] / wsum[good, None]
-        verts[good] += 0.42 * delta[good]
+        verts[good] += 0.34 * delta[good]
         refined.vertices = verts
-        trimesh.smoothing.filter_taubin(refined, lamb=0.30, nu=-0.31, iterations=2)
+        trimesh.smoothing.filter_taubin(refined, lamb=0.22, nu=-0.23, iterations=1)
         stats.append(iter_stat)
     return refined, stats
 
@@ -287,8 +311,7 @@ def silhouette_iou_mesh(mesh: trimesh.Trimesh, ds, mask: np.ndarray, view: str):
         x0,y0,x1,y1 = v3.bbox(mask); ppu=(y1-y0)/ds.height; cx=.5*(x0+x1)
         px=cx+verts[:,1]*ppu; py=y1-verts[:,2]*ppu
     pred=np.zeros(mask.shape,bool)
-    xi=np.clip(np.round(px).astype(int),0,mask.shape[1]-1)
-    yi=np.clip(np.round(py).astype(int),0,mask.shape[0]-1)
+    xi=np.clip(np.round(px).astype(int),0,mask.shape[1]-1); yi=np.clip(np.round(py).astype(int),0,mask.shape[0]-1)
     pred[yi,xi]=True
     pred=ndimage.binary_dilation(pred,iterations=3)
     pred=ndimage.binary_fill_holes(pred)
@@ -325,12 +348,14 @@ def build(args):
     for view in ISO_VIEWS:
         raw_pts, conf, calib = build_iso_cloud(ds, base_mesh, iso_depths[view], view, stride=3)
         reg_pts, reg = conservative_trimmed_icp(raw_pts, ref_pts, maxdim, iterations=5)
+        reliability = registration_reliability(reg, maxdim)
         iso_data[view] = {
             "points": reg_pts,
             "confidence": conf,
             "camera": normalize(ISO_CAMERA_DIRS[view]),
+            "reliability": reliability,
         }
-        iso_reg[view] = {"calibration": {
+        iso_reg[view] = {"reliability": reliability, "calibration": {
             "ppu": calib["ppu"],
             "cx": calib["cx"],
             "cy": calib["cy"],
@@ -352,7 +377,7 @@ def build(args):
 
     ortho_iou = {v: silhouette_iou_mesh(refined, ds, masks[v], v) for v in ORTHO_VIEWS}
     report = {
-        "pipeline": "V6: V5 orthographic learned-depth SDF base -> Depth Anything on 2 isometric views -> calibrated diagonal point clouds -> conservative trimmed similarity ICP -> visibility/confidence weighted mesh refinement -> solid STL",
+        "pipeline": "V6: V5 orthographic learned-depth SDF base -> Depth Anything on 2 isometric views -> calibrated diagonal point clouds -> reliability-gated trimmed ICP -> normal-only visibility/confidence weighted mesh refinement -> solid STL",
         "model": args.model,
         "resolution": list(args.resolution),
         "vertices": int(len(refined.vertices)),
@@ -384,7 +409,7 @@ def main():
     ap.add_argument("--model", default="depth-anything/Depth-Anything-V2-Small-hf")
     ap.add_argument("--resolution", nargs=3, type=int, default=[160, 168, 224])
     ap.add_argument("--refine-iterations", type=int, default=2)
-    ap.add_argument("--iso-refine-iterations", type=int, default=3)
+    ap.add_argument("--iso-refine-iterations", type=int, default=2)
     args = ap.parse_args()
     build(args)
 
