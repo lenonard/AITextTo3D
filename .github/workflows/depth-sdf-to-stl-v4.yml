@@ -1,10 +1,9 @@
-name: Learned Depth Fusion to STL V7 Refined
+name: Learned Depth Fusion to STL V8 Shape Locked
 
 on:
   push:
     paths:
-      - 'scripts/depth_sdf_reconstruct_v7_refine.py'
-      - 'scripts/depth_sdf_reconstruct_v7.py'
+      - 'scripts/depth_sdf_reconstruct_v8.py'
       - 'scripts/depth_sdf_reconstruct_v6.py'
       - 'scripts/depth_sdf_reconstruct_v5.py'
       - 'scripts/depth_sdf_reconstruct_v4.py'
@@ -20,7 +19,7 @@ on:
 jobs:
   reconstruct:
     runs-on: ubuntu-22.04
-    timeout-minutes: 55
+    timeout-minutes: 45
     env:
       HF_HOME: ${{ github.workspace }}/.hf-cache
       TRANSFORMERS_NO_ADVISORY_WARNINGS: '1'
@@ -46,14 +45,15 @@ jobs:
           path: |
             .depth-cache/v5
             .depth-cache/v6_iso
-          key: depth-v7-${{ runner.os }}-${{ hashFiles('datasets_depth/**/contact_sheet.b64.part*', 'datasets_depth/**/renders/**') }}
+          key: depth-v8-${{ runner.os }}-${{ hashFiles('datasets_depth/**/contact_sheet.b64.part*', 'datasets_depth/**/renders/**') }}
+          restore-keys: |
+            depth-v7-${{ runner.os }}-
 
       - name: Install CPU dependencies
         run: |
           python -m pip install --upgrade pip
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           pip install 'transformers>=4.45,<5' pillow scipy scikit-image trimesh safetensors huggingface_hub
-          pip install 'open3d==0.19.0' 'pymeshfix>=0.17.0'
 
       - name: Reassemble dataset contact sheet
         shell: bash
@@ -76,23 +76,21 @@ jobs:
               print('no contact-sheet chunks; using existing renders/contact sheet')
           PY
 
-      - name: Reconstruct refined V7 mesh
+      - name: Reconstruct V8 mesh
         shell: bash
         run: |
           set -euo pipefail
           ROOT="${{ github.event.inputs.dataset_root }}"
           if [[ -z "$ROOT" ]]; then ROOT='datasets_depth/cat_sitting_v1'; fi
-          mkdir -p output/depth_sdf_v7_diagnostics
-          python scripts/depth_sdf_reconstruct_v7_refine.py "$ROOT" \
-            -o output/cat_sitting_depth_sdf_v7.stl \
-            --diagnostics output/depth_sdf_v7_diagnostics \
+          mkdir -p output/depth_sdf_v8_diagnostics
+          python scripts/depth_sdf_reconstruct_v8.py "$ROOT" \
+            -o output/cat_sitting_depth_sdf_v8.stl \
+            --diagnostics output/depth_sdf_v8_diagnostics \
             --depth-cache .depth-cache/v5 \
             --iso-depth-cache .depth-cache/v6_iso \
-            --base-resolution 168 176 240 \
+            --resolution 176 184 248 \
             --refine-iterations 2 \
             --iso-refine-iterations 2 \
-            --poisson-depth 9 \
-            --max-points 320000 \
             --detail-iterations 2
 
       - name: Validate final STL
@@ -103,7 +101,7 @@ jobs:
           import json
           from pathlib import Path
           import trimesh
-          p=Path('output/cat_sitting_depth_sdf_v7.stl')
+          p=Path('output/cat_sitting_depth_sdf_v8.stl')
           m=trimesh.load(p, force='mesh')
           if m.volume < 0:
               m.invert()
@@ -118,8 +116,10 @@ jobs:
               'is_volume':bool(m.is_volume),
               'bounds':m.bounds.tolist(),
           }
-          Path('output/cat_sitting_depth_sdf_v7.validation.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+          Path('output/cat_sitting_depth_sdf_v8.validation.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
           print(json.dumps(report,indent=2))
+          if len(m.faces) < 50000:
+              raise SystemExit('V8 mesh unexpectedly low detail')
           PY
 
       - name: List outputs
@@ -128,7 +128,7 @@ jobs:
       - name: Upload reconstruction artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aitextto3d-depth-sdf-v7-refined
+          name: aitextto3d-depth-sdf-v8
           path: output/
           if-no-files-found: error
           retention-days: 14
