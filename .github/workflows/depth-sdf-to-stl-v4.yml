@@ -1,8 +1,9 @@
-name: Learned Depth Fusion to STL V7
+name: Learned Depth Fusion to STL V7 Refined
 
 on:
   push:
     paths:
+      - 'scripts/depth_sdf_reconstruct_v7_refine.py'
       - 'scripts/depth_sdf_reconstruct_v7.py'
       - 'scripts/depth_sdf_reconstruct_v6.py'
       - 'scripts/depth_sdf_reconstruct_v5.py'
@@ -52,7 +53,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           pip install 'transformers>=4.45,<5' pillow scipy scikit-image trimesh safetensors huggingface_hub
-          pip install 'open3d==0.19.0'
+          pip install 'open3d==0.19.0' 'pymeshfix>=0.17.0'
 
       - name: Reassemble dataset contact sheet
         shell: bash
@@ -75,14 +76,14 @@ jobs:
               print('no contact-sheet chunks; using existing renders/contact sheet')
           PY
 
-      - name: Reconstruct V7 joint metric-depth Poisson mesh
+      - name: Reconstruct refined V7 mesh
         shell: bash
         run: |
           set -euo pipefail
           ROOT="${{ github.event.inputs.dataset_root }}"
           if [[ -z "$ROOT" ]]; then ROOT='datasets_depth/cat_sitting_v1'; fi
           mkdir -p output/depth_sdf_v7_diagnostics
-          python scripts/depth_sdf_reconstruct_v7.py "$ROOT" \
+          python scripts/depth_sdf_reconstruct_v7_refine.py "$ROOT" \
             -o output/cat_sitting_depth_sdf_v7.stl \
             --diagnostics output/depth_sdf_v7_diagnostics \
             --depth-cache .depth-cache/v5 \
@@ -127,7 +128,7 @@ jobs:
       - name: Upload reconstruction artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aitextto3d-depth-sdf-v7
+          name: aitextto3d-depth-sdf-v7-refined
           path: output/
           if-no-files-found: error
           retention-days: 14
