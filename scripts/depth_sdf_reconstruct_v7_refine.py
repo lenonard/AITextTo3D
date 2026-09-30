@@ -42,7 +42,7 @@ def anchored_calibrate_depth(mesh, ds, depth: np.ndarray, mask: np.ndarray, view
     affine_metric = (a * rel_depth + b).astype(np.float32)
     base_metric = fill_sparse_depth(zbuf, mask)
 
-    # Keep the stable V6 low-frequency body while restoring local depth detail.
+    # Keep V6's stable low-frequency geometry and add learned high-frequency relief.
     low = ndimage.gaussian_filter(rel_depth, sigma=10.0)
     high = (rel_depth - low) * mask.astype(np.float32)
     hp = np.abs(high[mask])
@@ -102,10 +102,13 @@ def repaired_poisson(points, normals, base_mesh, ds, diag: Path, depth: int = 9)
     try:
         from pymeshfix import MeshFix
         fixer = MeshFix(mesh.vertices, mesh.faces)
-        # pymeshfix 0.18.x exposes joincomp/remove_smallest_components here,
-        # but not the older verbose keyword on this build.
         fixer.repair(joincomp=True, remove_smallest_components=False)
-        repaired = trimesh.Trimesh(vertices=np.asarray(fixer.v), faces=np.asarray(fixer.f), process=True)
+        # PyMeshFix exposes repaired arrays as .points and .faces.
+        repaired = trimesh.Trimesh(
+            vertices=np.asarray(fixer.points),
+            faces=np.asarray(fixer.faces),
+            process=True,
+        )
         comps = repaired.split(only_watertight=False)
         if len(comps) > 1:
             repaired = max(comps, key=lambda m: len(m.faces))
@@ -121,8 +124,6 @@ def repaired_poisson(points, normals, base_mesh, ds, diag: Path, depth: int = 9)
         return mesh
 
 
-# Patch V7's depth calibration and Poisson surface repair without duplicating the
-# whole joint-fusion implementation.
 v7.calibrate_depth_to_mesh = anchored_calibrate_depth
 v7.poisson_reconstruct = repaired_poisson
 
