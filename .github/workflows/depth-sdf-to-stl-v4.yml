@@ -1,8 +1,9 @@
-name: Learned Depth SDF to STL V5
+name: Learned Depth SDF to STL V6
 
 on:
   push:
     paths:
+      - 'scripts/depth_sdf_reconstruct_v6.py'
       - 'scripts/depth_sdf_reconstruct_v5.py'
       - 'scripts/depth_sdf_reconstruct_v4.py'
       - 'scripts/depth_sdf_reconstruct.py'
@@ -40,8 +41,10 @@ jobs:
       - name: Cache learned depth maps
         uses: actions/cache@v4
         with:
-          path: .depth-cache/v5
-          key: depth-v5-${{ runner.os }}-${{ hashFiles('datasets_depth/**/contact_sheet.b64.part*', 'datasets_depth/**/renders/**') }}
+          path: |
+            .depth-cache/v5
+            .depth-cache/v6_iso
+          key: depth-v6-${{ runner.os }}-${{ hashFiles('datasets_depth/**/contact_sheet.b64.part*', 'datasets_depth/**/renders/**') }}
 
       - name: Install CPU dependencies
         run: |
@@ -70,19 +73,21 @@ jobs:
               print('no contact-sheet chunks; using existing renders/contact sheet')
           PY
 
-      - name: Reconstruct V5 conservative learned-depth SDF mesh
+      - name: Reconstruct V6 multi-view learned-depth mesh
         shell: bash
         run: |
           set -euo pipefail
           ROOT="${{ github.event.inputs.dataset_root }}"
           if [[ -z "$ROOT" ]]; then ROOT='datasets_depth/cat_sitting_v1'; fi
-          mkdir -p output/depth_sdf_v5_diagnostics
-          python scripts/depth_sdf_reconstruct_v5.py "$ROOT" \
-            -o output/cat_sitting_depth_sdf_v5.stl \
-            --diagnostics output/depth_sdf_v5_diagnostics \
+          mkdir -p output/depth_sdf_v6_diagnostics
+          python scripts/depth_sdf_reconstruct_v6.py "$ROOT" \
+            -o output/cat_sitting_depth_sdf_v6.stl \
+            --diagnostics output/depth_sdf_v6_diagnostics \
             --depth-cache .depth-cache/v5 \
-            --resolution 152 160 216 \
-            --refine-iterations 2
+            --iso-depth-cache .depth-cache/v6_iso \
+            --resolution 160 168 224 \
+            --refine-iterations 2 \
+            --iso-refine-iterations 3
 
       - name: Validate final STL
         shell: bash
@@ -92,7 +97,7 @@ jobs:
           import json
           from pathlib import Path
           import trimesh
-          p=Path('output/cat_sitting_depth_sdf_v5.stl')
+          p=Path('output/cat_sitting_depth_sdf_v6.stl')
           m=trimesh.load(p, force='mesh')
           if m.volume < 0:
               m.invert()
@@ -107,7 +112,7 @@ jobs:
               'is_volume':bool(m.is_volume),
               'bounds':m.bounds.tolist(),
           }
-          Path('output/cat_sitting_depth_sdf_v5.validation.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+          Path('output/cat_sitting_depth_sdf_v6.validation.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
           print(json.dumps(report,indent=2))
           assert m.is_watertight, 'final STL is not watertight'
           assert m.is_volume, 'final STL is not a consistently oriented solid'
@@ -119,7 +124,7 @@ jobs:
       - name: Upload reconstruction artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aitextto3d-depth-sdf-v5
+          name: aitextto3d-depth-sdf-v6
           path: output/
           if-no-files-found: error
           retention-days: 14
