@@ -1,0 +1,124 @@
+name: Learned Depth SDF to STL V4
+
+on:
+  push:
+    paths:
+      - 'scripts/depth_sdf_reconstruct_v4.py'
+      - 'scripts/depth_sdf_reconstruct.py'
+      - '.github/workflows/depth-sdf-to-stl-v4.yml'
+  workflow_dispatch:
+    inputs:
+      dataset_root:
+        description: 'Dataset folder under repository root'
+        required: true
+        default: 'datasets_depth/cat_sitting_v1'
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+      TRANSFORMERS_NO_ADVISORY_WARNINGS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Cache Hugging Face model
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: depth-anything-v2-small-hf-v1
+
+      - name: Cache learned depth maps
+        uses: actions/cache@v4
+        with:
+          path: .depth-cache/v4
+          key: depth-v4-${{ runner.os }}-${{ hashFiles('datasets_depth/**/contact_sheet.b64.part*', 'datasets_depth/**/renders/**') }}
+
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install 'transformers>=4.45,<5' pillow scipy scikit-image trimesh safetensors huggingface_hub
+
+      - name: Reassemble dataset contact sheet
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${{ github.event.inputs.dataset_root }}"
+          if [[ -z "$ROOT" ]]; then ROOT='datasets_depth/cat_sitting_v1'; fi
+          python - "$ROOT" <<'PY'
+          import base64, sys
+          from pathlib import Path
+          root=Path(sys.argv[1])
+          parts=sorted(root.glob('contact_sheet.b64.part*'))
+          if parts:
+              payload=''.join(p.read_text(encoding='ascii').strip() for p in parts)
+              raw=base64.b64decode(payload, validate=True)
+              if len(raw)<1000: raise RuntimeError('contact sheet payload too small')
+              (root/'contact_sheet.jpg.b64').write_text(payload,encoding='ascii')
+              print(f'reassembled {len(parts)} chunks -> {len(raw)} bytes')
+          else:
+              print('no contact-sheet chunks; using existing renders/contact sheet')
+          PY
+
+      - name: Reconstruct V4 aligned learned-depth SDF mesh
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${{ github.event.inputs.dataset_root }}"
+          if [[ -z "$ROOT" ]]; then ROOT='datasets_depth/cat_sitting_v1'; fi
+          mkdir -p output/depth_sdf_v4_diagnostics
+          python scripts/depth_sdf_reconstruct_v4.py "$ROOT" \
+            -o output/cat_sitting_depth_sdf_v4.stl \
+            --diagnostics output/depth_sdf_v4_diagnostics \
+            --depth-cache .depth-cache/v4 \
+            --resolution 152 160 216 \
+            --refine-iterations 3
+
+      - name: Validate final STL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import trimesh
+          p=Path('output/cat_sitting_depth_sdf_v4.stl')
+          m=trimesh.load(p, force='mesh')
+          if m.volume < 0:
+              m.invert()
+          m.fill_holes()
+          m.remove_unreferenced_vertices()
+          m.export(p)
+          report={
+              'vertices':int(len(m.vertices)),
+              'faces':int(len(m.faces)),
+              'signed_volume':float(m.volume),
+              'watertight':bool(m.is_watertight),
+              'is_volume':bool(m.is_volume),
+              'bounds':m.bounds.tolist(),
+          }
+          Path('output/cat_sitting_depth_sdf_v4.validation.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+          print(json.dumps(report,indent=2))
+          assert m.is_watertight, 'final STL is not watertight'
+          assert m.is_volume, 'final STL is not a consistently oriented solid'
+          PY
+
+      - name: List outputs
+        run: find output -maxdepth 2 -type f -printf '%p %k KB\n' | sort
+
+      - name: Upload reconstruction artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aitextto3d-depth-sdf-v4
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
