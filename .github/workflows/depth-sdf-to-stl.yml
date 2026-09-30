@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'scripts/depth_sdf_reconstruct.py'
+      - 'scripts/run_depth_sdf.py'
       - 'datasets_depth/**'
       - '.github/workflows/depth-sdf-to-stl.yml'
   workflow_dispatch:
@@ -45,7 +46,7 @@ jobs:
           ROOT="${{ github.event.inputs.dataset_root }}"
           if [[ -z "$ROOT" ]]; then ROOT='datasets_depth/cat_sitting_v1'; fi
           mkdir -p output/depth_sdf_diagnostics
-          python scripts/depth_sdf_reconstruct.py "$ROOT" \
+          python scripts/run_depth_sdf.py "$ROOT" \
             -o output/cat_sitting_depth_sdf_v3.stl \
             --diagnostics output/depth_sdf_diagnostics \
             --resolution 144 152 208
