@@ -1,0 +1,68 @@
+name: Multiview Visual Hull to STL
+
+on:
+  push:
+    paths:
+      - 'scripts/multiview_to_stl.py'
+      - 'datasets_multiview/**'
+      - '.github/workflows/multiview-to-stl.yml'
+  workflow_dispatch:
+    inputs:
+      input_path:
+        description: 'Path to a multiview bundle JSON or ZIP in the repository'
+        required: false
+        default: 'datasets_multiview/cat_sitting_v2.json'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pillow scipy scikit-image trimesh
+
+      - name: Build multiview STL
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            in="${{ inputs.input_path }}"
+            base=$(basename "$in")
+            stem="${base%.*}"
+            python scripts/multiview_to_stl.py "$in" -o "output/${stem}.stl"
+          else
+            shopt -s nullglob globstar
+            files=(datasets_multiview/**/*.json datasets_multiview/**/*.zip)
+            if [[ ${#files[@]} -eq 0 ]]; then
+              echo 'No multiview datasets found.'
+              exit 1
+            fi
+            for in in "${files[@]}"; do
+              base=$(basename "$in")
+              stem="${base%.*}"
+              echo "Building $in -> output/${stem}.stl"
+              python scripts/multiview_to_stl.py "$in" -o "output/${stem}.stl"
+            done
+          fi
+
+      - name: List output
+        run: ls -lah output
+
+      - name: Upload multiview STL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aitextto3d-multiview-stl
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
