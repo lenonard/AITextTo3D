@@ -75,9 +75,9 @@ def cross_view_align(ds, surfaces, masks, diag: Path):
     sfb = np.ones_like(target_depth)
     slr = np.ones_like(target_width)
     ok = (pred_depth > 1e-5) & (target_depth > 1e-5)
-    sfb[ok] = np.clip(target_depth[ok] / pred_depth[ok], 0.72, 1.35)
+    sfb[ok] = np.clip(target_depth[ok] / pred_depth[ok], 0.65, 1.80)
     ok = (pred_width > 1e-5) & (target_width > 1e-5)
-    slr[ok] = np.clip(target_width[ok] / pred_width[ok], 0.72, 1.35)
+    slr[ok] = np.clip(target_width[ok] / pred_width[ok], 0.65, 1.80)
     sfb = ndimage.gaussian_filter1d(sfb, 5.0)
     slr = ndimage.gaussian_filter1d(slr, 5.0)
     for v in ("front", "back"):
@@ -155,8 +155,9 @@ def silhouette_volumes(ds, masks, axes):
     return vols, allowed
 
 
-def reprojection_refine(ds, sdf: np.ndarray, masks, axes, iterations=3):
-    occ = sdf >= 0
+def reprojection_refine(ds, sdf: np.ndarray, masks, axes, iterations=4):
+    base = sdf.astype(np.float32).copy()
+    occ = base >= 0
     vols, allowed = silhouette_volumes(ds, masks, axes)
     metrics=[]
     for _ in range(iterations):
@@ -180,7 +181,12 @@ def reprojection_refine(ds, sdf: np.ndarray, masks, axes, iterations=3):
         metrics.append(errs)
     dist_in = ndimage.distance_transform_edt(occ)
     dist_out = ndimage.distance_transform_edt(~occ)
-    return (dist_in - dist_out).astype(np.float32), metrics
+    voxel = min(float(np.mean(np.diff(a))) for a in axes)
+    reproj = (dist_in - dist_out).astype(np.float32) * voxel
+    refined = 0.68 * base + 0.32 * reproj
+    refined[~allowed] = np.minimum(refined[~allowed], -0.35 * voxel)
+    refined = ndimage.gaussian_filter(refined, sigma=0.8)
+    return refined.astype(np.float32), metrics
 
 
 def build(args):
@@ -218,7 +224,7 @@ def main():
     ap.add_argument("--depth-cache",default=".depth-cache/v4")
     ap.add_argument("--model",default="depth-anything/Depth-Anything-V2-Small-hf")
     ap.add_argument("--resolution",nargs=3,type=int,default=[152,160,216])
-    ap.add_argument("--refine-iterations",type=int,default=5)
+    ap.add_argument("--refine-iterations",type=int,default=4)
     args=ap.parse_args(); build(args)
 
 if __name__=="__main__": main()
