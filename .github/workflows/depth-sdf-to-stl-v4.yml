@@ -87,7 +87,7 @@ jobs:
             --iso-depth-cache .depth-cache/v6_iso \
             --resolution 160 168 224 \
             --refine-iterations 2 \
-            --iso-refine-iterations 3
+            --iso-refine-iterations 2
 
       - name: Validate final STL
         shell: bash
