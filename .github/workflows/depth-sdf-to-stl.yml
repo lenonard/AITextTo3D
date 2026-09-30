@@ -50,6 +50,27 @@ jobs:
             -o output/cat_sitting_depth_sdf_v3.stl \
             --diagnostics output/depth_sdf_diagnostics \
             --resolution 144 152 208
+      - name: Fix STL winding and validate solid
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import trimesh
+          p=Path('output/cat_sitting_depth_sdf_v3.stl')
+          m=trimesh.load(p, force='mesh')
+          if m.volume < 0:
+              m.invert()
+              m.export(p)
+          report_path=p.with_suffix('.build.json')
+          report=json.loads(report_path.read_text())
+          report['signed_volume_after_winding_fix']=float(m.volume)
+          report['watertight_after_winding_fix']=bool(m.is_watertight)
+          report['is_volume_after_winding_fix']=bool(m.is_volume)
+          report_path.write_text(json.dumps(report,indent=2))
+          assert m.is_watertight, 'final STL is not watertight'
+          assert m.is_volume, 'final STL is not a consistently oriented solid'
+          print(json.dumps(report,indent=2))
+          PY
       - name: List outputs
         run: find output -maxdepth 2 -type f -printf '%p %k KB\n' | sort
       - name: Upload reconstruction artifact
