@@ -1,0 +1,60 @@
+name: Learned Depth SDF to STL
+
+on:
+  push:
+    paths:
+      - 'scripts/depth_sdf_reconstruct.py'
+      - 'datasets_depth/**'
+      - '.github/workflows/depth-sdf-to-stl.yml'
+  workflow_dispatch:
+    inputs:
+      dataset_root:
+        description: 'Dataset folder under repository root'
+        required: true
+        default: 'datasets_depth/cat_sitting_v1'
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+      TRANSFORMERS_NO_ADVISORY_WARNINGS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Cache Hugging Face model
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: depth-anything-v2-small-hf-v1
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install 'transformers>=4.45,<5' pillow scipy scikit-image trimesh safetensors huggingface_hub
+      - name: Reconstruct learned-depth SDF mesh
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${{ github.event.inputs.dataset_root }}"
+          if [[ -z "$ROOT" ]]; then ROOT='datasets_depth/cat_sitting_v1'; fi
+          mkdir -p output/depth_sdf_diagnostics
+          python scripts/depth_sdf_reconstruct.py "$ROOT" \
+            -o output/cat_sitting_depth_sdf_v3.stl \
+            --diagnostics output/depth_sdf_diagnostics \
+            --resolution 144 152 208
+      - name: List outputs
+        run: find output -maxdepth 2 -type f -printf '%p %k KB\n' | sort
+      - name: Upload reconstruction artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aitextto3d-depth-sdf-v3
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
